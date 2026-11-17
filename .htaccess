@@ -1,0 +1,20 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Strip Render internal port 10000 from Host redirects if detected
+    RewriteCond %{HTTP_HOST} ^([^:]+):10000$ [NC]
+    RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
+
+    # Prevent directory listing
+    Options -Indexes
+
+    # Route admin access to admin/index.php cleanly
+    RewriteRule ^admin/?$ admin/index.php [L,QSA]
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+</IfModule>
