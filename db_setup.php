@@ -30,6 +30,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'test_custom') {
 
 // Function to establish connection
 function get_db_connection($host, $user, $pass, $db, $port, $ssl) {
+    if (function_exists('mysqli_report')) {
+        @mysqli_report(MYSQLI_REPORT_OFF);
+    }
     $conn = mysqli_init();
     if (!$conn) {
         return ['conn' => null, 'error' => 'mysqli_init failed'];
@@ -51,7 +54,7 @@ function get_db_connection($host, $user, $pass, $db, $port, $ssl) {
         if ($ssl && ($host === 'localhost' || $host === '127.0.0.1')) {
             $conn2 = mysqli_init();
             if (@$conn2->real_connect($host, $user, $pass, $db, $port)) {
-                $conn2->set_charset("utf8mb4");
+                @$conn2->set_charset("utf8mb4");
                 return ['conn' => $conn2, 'error' => null, 'ssl_used' => false];
             }
         }
@@ -94,9 +97,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'import_sql') {
     } else {
         $sql_content = file_get_contents($found_sql_file);
         
-        // Temporarily disable foreign keys and auto-commit
-        $conn->query("SET FOREIGN_KEY_CHECKS = 0;");
-        $conn->query("SET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';");
+        // Clean Reset: Drop existing messaging tables first
+        @$conn->query("SET FOREIGN_KEY_CHECKS = 0;");
+        @$conn->query("SET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';");
+        @$conn->query("DROP TABLE IF EXISTS `convo_list`;");
+        @$conn->query("DROP TABLE IF EXISTS `messages`;");
+        @$conn->query("DROP TABLE IF EXISTS `users`;");
         
         // Clean and parse SQL into individual statements
         $lines = explode("\n", $sql_content);
@@ -117,8 +123,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'import_sql') {
             if (!empty($statement)) {
                 $q = @$conn->query($statement);
                 if (!$q) {
-                    // Ignore benign drops/mode errors
-                    if (!str_contains($conn->error, 'already exists') && !str_contains($conn->error, 'Unknown system variable')) {
+                    if (!str_contains($conn->error, 'Unknown system variable')) {
                         $errors[] = $conn->error;
                     }
                 } else {
@@ -127,14 +132,14 @@ if (isset($_POST['action']) && $_POST['action'] === 'import_sql') {
             }
         }
 
-        $conn->query("SET FOREIGN_KEY_CHECKS = 1;");
+        @$conn->query("SET FOREIGN_KEY_CHECKS = 1;");
 
         if (count($errors) === 0 || $queries_count > 5) {
             $import_status = 'success';
-            $import_message = "Database imported successfully! Executed " . $queries_count . " queries.";
+            $import_message = "Database tables cleanly created and imported successfully! Executed " . $queries_count . " queries.";
         } else {
             $import_status = 'warning';
-            $import_message = "Import completed with " . count($errors) . " notices. Queries executed: " . $queries_count . ". First notice: " . ($errors[0] ?? '');
+            $import_message = "Import completed with " . count($errors) . " notices. Queries executed: " . $queries_count . ". Notice: " . ($errors[0] ?? '');
         }
     }
 }
@@ -144,9 +149,10 @@ $existing_tables = [];
 $admin_exists = false;
 $user_count = 0;
 $messages_count = 0;
+$has_email_col = false;
 
 if ($conn) {
-    $tables_res = $conn->query("SHOW TABLES");
+    $tables_res = @$conn->query("SHOW TABLES");
     if ($tables_res && $tables_res instanceof mysqli_result) {
         while ($trow = $tables_res->fetch_array()) {
             $existing_tables[] = $trow[0];
@@ -154,18 +160,22 @@ if ($conn) {
     }
 
     if (in_array('users', $existing_tables)) {
-        $ures = $conn->query("SELECT COUNT(*) FROM `users`");
-        if ($ures && $ures instanceof mysqli_result) {
-            $user_count = $ures->fetch_row()[0];
-        }
-        $admin_check = $conn->query("SELECT * FROM `users` WHERE `email` = 'jsmith@sample.com'");
-        if ($admin_check && $admin_check instanceof mysqli_result && $admin_check->num_rows > 0) {
-            $admin_exists = true;
+        $col_check = @$conn->query("SHOW COLUMNS FROM `users` LIKE 'email'");
+        if ($col_check && $col_check->num_rows > 0) {
+            $has_email_col = true;
+            $ures = @$conn->query("SELECT COUNT(*) FROM `users`");
+            if ($ures && $ures instanceof mysqli_result) {
+                $user_count = $ures->fetch_row()[0];
+            }
+            $admin_check = @$conn->query("SELECT * FROM `users` WHERE `email` = 'jsmith@sample.com'");
+            if ($admin_check && $admin_check instanceof mysqli_result && $admin_check->num_rows > 0) {
+                $admin_exists = true;
+            }
         }
     }
 
     if (in_array('messages', $existing_tables)) {
-        $mres = $conn->query("SELECT COUNT(*) FROM `messages`");
+        $mres = @$conn->query("SELECT COUNT(*) FROM `messages`");
         if ($mres && $mres instanceof mysqli_result) {
             $messages_count = $mres->fetch_row()[0];
         }
@@ -241,7 +251,7 @@ if ($conn) {
             <p class="mb-0"><?php echo htmlspecialchars($import_message); ?></p>
             <hr>
             <div class="d-flex justify-content-between align-items-center">
-                <span>All default tables and the default admin user are ready.</span>
+                <span>All default tables and the default admin user (<code>jsmith@sample.com</code> / <code>jsmith</code>) are ready.</span>
                 <a href="./login.php" class="btn btn-success btn-sm"><i class="fa fa-sign-in-alt me-1"></i> Proceed to Login</a>
             </div>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -257,6 +267,14 @@ if ($conn) {
             <h5 class="alert-heading"><i class="fa fa-times-circle me-2"></i> Import Failed</h5>
             <p class="mb-0"><?php echo htmlspecialchars($import_message); ?></p>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    <?php endif; ?>
+
+    <?php if (in_array('users', $existing_tables) && !$has_email_col): ?>
+        <div class="alert alert-danger shadow-sm mb-4" role="alert">
+            <h5 class="alert-heading"><i class="fa fa-exclamation-triangle me-2"></i> Incompatible Schema Detected!</h5>
+            <p>An existing table named <code>users</code> was found in your database, but it belongs to another application (it does not contain the required <code>email</code> column).</p>
+            <p class="mb-0">Click the green button <strong>"Clean Re-Import Database to Aiven"</strong> below to safely replace it with the Messaging App schema.</p>
         </div>
     <?php endif; ?>
 
@@ -349,7 +367,7 @@ if ($conn) {
                 <div class="card-body d-flex flex-column justify-content-between">
                     <div>
                         <p class="text-muted small">
-                            Automatically import the initial database tables (<code>users</code>, <code>messages</code>, <code>convo_list</code>) and default accounts into your Aiven MySQL cloud instance.
+                            Automatically clean-resets and imports initial tables (<code>users</code>, <code>messages</code>, <code>convo_list</code>) and pre-seeded demo accounts into your Aiven MySQL cloud database.
                         </p>
 
                         <div class="mb-3">
@@ -382,16 +400,16 @@ if ($conn) {
 
                         <?php if ($admin_exists): ?>
                             <div class="alert alert-success py-2 small mb-3">
-                                <i class="fa fa-user-shield me-1"></i> <strong>Admin User Verified:</strong> <code>jsmith@sample.com</code> is present in the database!
+                                <i class="fa fa-user-shield me-1"></i> <strong>Admin User Verified:</strong> <code>jsmith@sample.com</code> is ready to log in!
                             </div>
                         <?php endif; ?>
                     </div>
 
                     <div>
-                        <form method="POST" onsubmit="return confirm('Do you want to import/reset the database with the schema dump?');">
+                        <form method="POST" onsubmit="return confirm('Do you want to clean-import the Messaging App database schema? Any old conflicting tables will be replaced.');">
                             <input type="hidden" name="action" value="import_sql">
                             <button type="submit" class="btn btn-success w-100 py-2 fw-bold" <?php echo (!$conn || !$found_sql_file) ? 'disabled' : ''; ?>>
-                                <i class="fa fa-cloud-upload-alt me-2"></i> 1-Click Import Database to Aiven
+                                <i class="fa fa-cloud-upload-alt me-2"></i> Clean Re-Import Database to Aiven
                             </button>
                         </form>
                     </div>

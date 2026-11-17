@@ -22,6 +22,11 @@ SET time_zone = "+00:00";
 -- Database: `messaging_db`
 --
 
+SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS `convo_list`;
+DROP TABLE IF EXISTS `messages`;
+DROP TABLE IF EXISTS `users`;
+
 -- --------------------------------------------------------
 
 --

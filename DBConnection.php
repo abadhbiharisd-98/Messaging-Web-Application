@@ -99,6 +99,48 @@ class DBConnection {
         }
     }
 
+    public function autoFixSchema() {
+        if (!$this->conn) return false;
+        $sql_paths = [
+            __DIR__ . '/db/messaging_db.sql',
+            __DIR__ . '/messaging/db/messaging_db.sql'
+        ];
+        $sql_file = null;
+        foreach ($sql_paths as $p) {
+            if (file_exists($p)) {
+                $sql_file = $p;
+                break;
+            }
+        }
+        if (!$sql_file) return false;
+
+        $sql_content = file_get_contents($sql_file);
+        @$this->conn->query("SET FOREIGN_KEY_CHECKS = 0;");
+        @$this->conn->query("SET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';");
+        @$this->conn->query("DROP TABLE IF EXISTS `convo_list`;");
+        @$this->conn->query("DROP TABLE IF EXISTS `messages`;");
+        @$this->conn->query("DROP TABLE IF EXISTS `users`;");
+
+        $lines = explode("\n", $sql_content);
+        $clean_sql = "";
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+            if ($trimmed === '' || str_starts_with($trimmed, '--') || str_starts_with($trimmed, '/*') || str_starts_with($trimmed, '//')) {
+                continue;
+            }
+            $clean_sql .= $line . "\n";
+        }
+        $statements = explode(";\n", $clean_sql);
+        foreach ($statements as $st) {
+            $st = trim($st);
+            if (!empty($st)) {
+                @$this->conn->query($st);
+            }
+        }
+        @$this->conn->query("SET FOREIGN_KEY_CHECKS = 1;");
+        return true;
+    }
+
     public function isMobileDevice() {
         $aMobileUA = array(
             '/iphone/i' => 'iPhone', 

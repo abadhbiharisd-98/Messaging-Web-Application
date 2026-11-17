@@ -23,9 +23,20 @@ Class Actions extends DBConnection{
             $password = isset($password) ? md5($password) : '';
             $sql = "SELECT * FROM `users` where `email` = '{$email}' and `password` = '{$password}' ";
             $qry = @$this->conn->query($sql);
+
+            // AUTO-FIX SCHEMA MISMATCH:
+            // If table 'users' belongs to an old project and lacks 'email' column (error 1054)
+            // or table doesn't exist (error 1146):
+            if (!$qry && ($this->conn->errno == 1054 || $this->conn->errno == 1146 || strpos($this->conn->error, "Unknown column 'email'") !== false)) {
+                $fixed = $this->autoFixSchema();
+                if ($fixed) {
+                    $qry = @$this->conn->query($sql);
+                }
+            }
+
             if (!$qry) {
                 $resp['status'] = "failed";
-                $resp['msg'] = "Database Error: " . ($this->conn->error ?: "Table 'users' may not exist. Please click 'DB Setup' below to import the database.");
+                $resp['msg'] = "Database Error: " . ($this->conn->error ?: "Table 'users' issue. Please click 'DB Setup' below to re-import the database.");
                 return json_encode($resp);
             }
             $row = ($qry instanceof mysqli_result) ? $qry->fetch_array() : null;
@@ -83,6 +94,12 @@ Class Actions extends DBConnection{
             $id = isset($id) ? intval($id) : 0;
             $email_escaped = isset($email) ? $this->conn->real_escape_string($email) : '';
             $check_qry = @$this->conn->query("SELECT * FROM users where `email` = '{$email_escaped}' ".($id > 0 ? " and id != '{$id}' " : ""));
+            
+            if (!$check_qry && ($this->conn->errno == 1054 || $this->conn->errno == 1146)) {
+                $this->autoFixSchema();
+                $check_qry = @$this->conn->query("SELECT * FROM users where `email` = '{$email_escaped}' ".($id > 0 ? " and id != '{$id}' " : ""));
+            }
+
             $check = ($check_qry && $check_qry instanceof mysqli_result) ? $check_qry->num_rows : 0;
 
             if($check > 0){
