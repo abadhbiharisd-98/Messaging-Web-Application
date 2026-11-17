@@ -224,9 +224,9 @@
 <script>
     var message_limit = '<?php echo $message_limit ?>';
     var message_offset = '<?php echo $message_offset ?>';
-    var messages = $.parseJSON('<?php echo json_encode($messages_arr) ?>');
-    var mids = $.parseJSON('<?php echo json_encode($messages_ids) ?>');
-    var last_id = mids.length > 0 ? mids[0] : 0;
+    var messages = <?php echo json_encode($messages_arr, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?: '[]' ?>;
+    var mids = <?php echo json_encode(array_values(array_map('intval', $messages_ids))) ?: '[]' ?>;
+    var last_id = mids.length > 0 ? Math.max.apply(Math, mids) : 0;
     var messageInterval;
     var nmInterval;
     var deleteInterval;
@@ -234,7 +234,7 @@
         $('#list-search-items').html('')
         $('#search-loader').removeClass('d-none')
         $.ajax({
-            url:'Actions.php?a=find_user',
+            url:'./Actions.php?a=find_user',
             method:'POST',
             data:{'keyword':$keyword},
             dataType:'json',
@@ -287,7 +287,7 @@
     function delete_message_action(id){
         $('.modal').modal('hide')
         $.ajax({
-            url:'Actions.php?a=delete_message',
+            url:'./Actions.php?a=delete_message',
             method:'POST',
             data:{id:id},
             dataType:'json',
@@ -311,7 +311,7 @@
         })
         if(ids.length > 0){
             $.ajax({
-                url:'Actions.php?a=check_deleted',
+                url:'./Actions.php?a=check_deleted',
                 method:'POST',
                 data:{ids:ids.join(',')},
                 dataType:'json',
@@ -331,7 +331,7 @@
     function get_messages(){
         var convo_with = '<?php echo $convo_with ?>';
         $.ajax({
-            url:'Actions.php?a=get_messages',
+            url:'./Actions.php?a=get_messages',
             method:'POST',
             data:{last_id:last_id,convo_with:convo_with},
             dataType:'json',
@@ -353,7 +353,7 @@
     }
     function get_unread(){
         $.ajax({
-            url:'Actions.php?a=get_unread',
+            url:'./Actions.php?a=get_unread',
             dataType:'json',
             error:err=>{
                 console.log(err)
@@ -399,27 +399,45 @@
             scroll_bottom()
             $('#scroll-bottom').addClass('d-none')
         })
+        $('#message').on('keydown', function(e){
+            if(e.which === 13 && !e.shiftKey){
+                e.preventDefault();
+                $('#message-form').submit();
+            }
+        });
         $('#message-form').submit(function(e){
-            e.preventDefault()
-            var message = $('#message').val()
-            if(message == '')
-            return false;
+            e.preventDefault();
+            var message = $('#message').val().trim();
+            if(message === '') {
+                $('#message').focus();
+                return false;
+            }
+            var btn = $(this).find('button[type="submit"]');
+            var origBtnText = btn.html();
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Sending...');
+
             $.ajax({
-                url:'Actions.php?a=send_message',
-                method:'POST',
-                data:$(this).serialize(),
-                dataType:'json',
-                error:err=>{
-                    console.log(err)
+                url: './Actions.php?a=send_message',
+                method: 'POST',
+                data: $(this).serialize(),
+                dataType: 'json',
+                error: function(xhr, status, error) {
+                    console.error("Send message error:", xhr.responseText || error);
+                    alert("Network error: Could not send message. Please check connection.");
+                    btn.prop('disabled', false).html(origBtnText);
                 },
-                success:function(resp){
-                    if(resp.status == 'success'){
-                        $('#message').val('').focus()
-                        get_messages()
+                success: function(resp){
+                    btn.prop('disabled', false).html(origBtnText);
+                    if(resp && resp.status === 'success'){
+                        $('#message').val('').focus();
+                        get_messages();
+                    } else {
+                        var errMsg = (resp && resp.error) ? resp.error : "Failed to send message.";
+                        alert("Message Error: " + errMsg);
                     }
                 }
-            })
-        })
+            });
+        });
         if('<?php echo $convo_with ?>' != ''){
             messageInterval = setInterval(get_messages,2500)
             deleteInterval = setInterval(check_deleted,3000)

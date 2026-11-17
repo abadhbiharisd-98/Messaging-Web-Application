@@ -1,5 +1,7 @@
 <?php 
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once('DBConnection.php');
 
 Class Actions extends DBConnection{
@@ -294,24 +296,42 @@ Class Actions extends DBConnection{
         try {
             if(!$this->conn || $this->error){
                 $resp['status'] = "failed";
-                $resp['error'] = "Database not connected.";
+                $resp['error'] = "Database not connected: " . ($this->error ?: "Check DB connection.");
                 return json_encode($resp);
             }
             $from_user = isset($_SESSION['id']) ? intval($_SESSION['id']) : 0;
-            $to_user = isset($user_to) ? intval($user_to) : 0;
+            $to_user = isset($_POST['user_to']) ? intval($_POST['user_to']) : (isset($user_to) ? intval($user_to) : 0);
+            if($from_user <= 0){
+                $resp['status'] = "failed";
+                $resp['error'] = "Session expired. Please log in again.";
+                return json_encode($resp);
+            }
+            if($to_user <= 0){
+                $resp['status'] = "failed";
+                $resp['error'] = "Recipient user not found.";
+                return json_encode($resp);
+            }
+            $raw_msg = isset($_POST['message']) ? trim($_POST['message']) : '';
+            if($raw_msg === ''){
+                $resp['status'] = "failed";
+                $resp['error'] = "Message cannot be empty.";
+                return json_encode($resp);
+            }
+            $clean_msg = $this->conn->real_escape_string($raw_msg);
+            $clean_msg = str_replace(["\r\n", "\r", "\n"], '<br>', $clean_msg);
             $type = 1;
-            $message = isset($message) ? $this->conn->real_escape_string($message) : '';
-            $message = str_replace('/r','<br>',$message);
-            $ins_message = @$this->conn->query("INSERT INTO `messages` set from_user='{$from_user}', to_user='{$to_user}', `type` = '{$type}',`message` ='{$message}' ");
+            $sql = "INSERT INTO `messages` (`from_user`, `to_user`, `type`, `message`, `status`, `popped`, `delete_flag`, `date_created`) VALUES ('{$from_user}', '{$to_user}', '{$type}', '{$clean_msg}', 0, 0, 0, NOW())";
+            $ins_message = @$this->conn->query($sql);
             if($ins_message){
                 $resp['status'] = "success";
+                $resp['id'] = $this->conn->insert_id;
             }else{
                 $resp['status'] = "failed";
-                $resp['error'] = $this->conn->error;
+                $resp['error'] = "DB error: " . ($this->conn->error ?: "Could not insert message.");
             }
         } catch (Throwable $e) {
             $resp['status'] = "failed";
-            $resp['error'] = $e->getMessage();
+            $resp['error'] = "Server Error: " . $e->getMessage();
         }
         return json_encode($resp);
     }
@@ -325,12 +345,12 @@ Class Actions extends DBConnection{
             }
             $last_id = empty($last_id) ? 0 : intval($last_id);
             $sess_id = isset($_SESSION['id']) ? intval($_SESSION['id']) : 0;
-            $convo_with = isset($convo_with) ? intval($convo_with) : 0;
-            $messages = @$this->conn->query("SELECT * FROM `messages` where ((from_user = '{$sess_id}' and to_user = '{$convo_with}') OR (to_user = '{$sess_id}' and from_user = '{$convo_with}')) and id > {$last_id} order by unix_timestamp(date_created) asc ");
+            $convo_with = isset($_POST['convo_with']) ? intval($_POST['convo_with']) : (isset($convo_with) ? intval($convo_with) : 0);
+            $messages = @$this->conn->query("SELECT * FROM `messages` where ((from_user = '{$sess_id}' and to_user = '{$convo_with}') OR (to_user = '{$sess_id}' and from_user = '{$convo_with}')) and id > {$last_id} and delete_flag = 0 order by unix_timestamp(date_created) asc, id asc ");
             $ids = array();
             if($messages && $messages instanceof mysqli_result){
                 while($row = $messages->fetch_assoc()){
-                    $row['message'] = str_replace('\r','<br>',$row['message']);
+                    $row['message'] = str_replace(["\r\n", "\r", "\n"], '<br>', $row['message']);
                     $data[] = $row;
                     if($row['from_user'] != $sess_id)
                         $ids[] = $row['id'];
