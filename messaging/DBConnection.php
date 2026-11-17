@@ -1,6 +1,11 @@
 <?php
 date_default_timezone_set('Asia/Manila');
 
+// In PHP 8.1+, mysqli throws exceptions by default. Turn it off so queries return false instead of fatal crash.
+if (function_exists('mysqli_report')) {
+    @mysqli_report(MYSQLI_REPORT_OFF);
+}
+
 if (!is_dir(__DIR__ . '/db')) {
     @mkdir(__DIR__ . '/db', 0777, true);
 }
@@ -40,53 +45,58 @@ class DBConnection {
     }
 
     public function connect() {
-        $this->conn = mysqli_init();
-        if (!$this->conn) {
-            $this->error = "mysqli_init initialization failed.";
-            return false;
-        }
-
-        $flags = 0;
-        if ($this->use_ssl) {
-            if (defined('MYSQLI_OPT_SSL_VERIFY_SERVER_CERT')) {
-                @$this->conn->options(MYSQLI_OPT_SSL_VERIFY_SERVER_CERT, false);
+        try {
+            $this->conn = mysqli_init();
+            if (!$this->conn) {
+                $this->error = "mysqli_init initialization failed.";
+                return false;
             }
-            @$this->conn->ssl_set(NULL, NULL, NULL, NULL, NULL);
-            $flags |= MYSQLI_CLIENT_SSL;
-        }
 
-        @$this->conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 10);
-
-        $connected = @$this->conn->real_connect(
-            $this->host,
-            $this->username,
-            $this->password,
-            $this->database,
-            $this->port,
-            NULL,
-            $flags
-        );
-
-        if (!$connected) {
-            $this->error = $this->conn->connect_error ?: mysqli_connect_error();
-            // Fallback attempt without SSL if host is localhost/127.0.0.1
-            if ($this->use_ssl && ($this->host === 'localhost' || $this->host === '127.0.0.1')) {
-                $this->conn = mysqli_init();
-                @$this->conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 5);
-                $fallback = @$this->conn->real_connect($this->host, $this->username, $this->password, $this->database, $this->port);
-                if ($fallback) {
-                    $this->error = null;
-                    $this->use_ssl = false;
-                    $this->conn->set_charset("utf8mb4");
-                    return true;
+            $flags = 0;
+            if ($this->use_ssl) {
+                if (defined('MYSQLI_OPT_SSL_VERIFY_SERVER_CERT')) {
+                    @$this->conn->options(MYSQLI_OPT_SSL_VERIFY_SERVER_CERT, false);
                 }
+                @$this->conn->ssl_set(NULL, NULL, NULL, NULL, NULL);
+                $flags |= MYSQLI_CLIENT_SSL;
             }
+
+            @$this->conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 10);
+
+            $connected = @$this->conn->real_connect(
+                $this->host,
+                $this->username,
+                $this->password,
+                $this->database,
+                $this->port,
+                NULL,
+                $flags
+            );
+
+            if (!$connected) {
+                $this->error = $this->conn->connect_error ?: (mysqli_connect_error() ?: "Unable to connect to database ({$this->host}:{$this->port})");
+                // Fallback attempt without SSL if host is localhost/127.0.0.1
+                if ($this->use_ssl && ($this->host === 'localhost' || $this->host === '127.0.0.1')) {
+                    $this->conn = mysqli_init();
+                    @$this->conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 5);
+                    $fallback = @$this->conn->real_connect($this->host, $this->username, $this->password, $this->database, $this->port);
+                    if ($fallback) {
+                        $this->error = null;
+                        $this->use_ssl = false;
+                        @$this->conn->set_charset("utf8mb4");
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            @$this->conn->set_charset("utf8mb4");
+            $this->error = null;
+            return true;
+        } catch (Throwable $e) {
+            $this->error = $e->getMessage();
             return false;
         }
-
-        @$this->conn->set_charset("utf8mb4");
-        $this->error = null;
-        return true;
     }
 
     public function isMobileDevice() {

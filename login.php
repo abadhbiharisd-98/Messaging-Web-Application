@@ -55,7 +55,7 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'home';
                 <?php if($mydb && $mydb->error): ?>
                     <div class="alert alert-warning py-2 mb-3">
                         <small><strong>Notice:</strong> Database is not connected yet.<br>
-                        <a href="./db_setup.php" class="alert-link">Click here to configure Aiven MySQL</a></small>
+                        <a href="./db_setup.php" class="alert-link fw-bold">Click here to configure/import Aiven MySQL</a></small>
                     </div>
                 <?php endif; ?>
 
@@ -65,14 +65,14 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'home';
                         <label for="email" class="form-label fw-bold small text-muted">Email Address</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fa fa-envelope"></i></span>
-                            <input type="email" id="email" autofocus name="email" class="form-control" placeholder="jsmith@sample.com" required>
+                            <input type="email" id="email" autofocus name="email" class="form-control" placeholder="jsmith@sample.com" value="jsmith@sample.com" required>
                         </div>
                     </div>
                     <div class="form-group mb-4">
                         <label for="password" class="form-label fw-bold small text-muted">Password</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fa fa-lock"></i></span>
-                            <input type="password" id="password" name="password" class="form-control" placeholder="Password" required>
+                            <input type="password" id="password" name="password" class="form-control" placeholder="Password" value="jsmith" required>
                         </div>
                     </div>
                     <div class="d-grid gap-2 mb-3">
@@ -108,8 +108,17 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'home';
                 dataType:'JSON',
                 error:err=>{
                     console.log(err);
+                    var errMsg = "Database connect nahi ho paya ya table missing hai.";
+                    try {
+                        var json = JSON.parse(err.responseText);
+                        if (json && json.msg) errMsg = json.msg;
+                    } catch(e) {
+                        if (err.responseText && err.responseText.length < 300) {
+                            errMsg = err.responseText;
+                        }
+                    }
                     _el.addClass('alert alert-danger mb-3');
-                    _el.text("An error occurred. Check network or database connection.");
+                    _el.html("<div><strong>Error:</strong> " + errMsg + "</div><div class='mt-2 small border-top pt-1'>👉 Agar database import nahi kiya hai to <a href='./db_setup.php' class='alert-link fw-bold text-decoration-underline'>DB Setup par click karein</a> aur 1-Click Import run karein.</div>");
                     _this.prepend(_el);
                     _el.show('slow');
                     _this.find('button[type="submit"]').attr('disabled', false).text('Login');
@@ -122,10 +131,14 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'home';
                         _el.show('slow');
                         setTimeout(() => {
                             location.replace('./index.php');
-                        }, 1200);
+                        }, 1000);
                     }else{
                         _el.addClass('alert alert-danger mb-3');
-                        _el.text(resp.msg);
+                        var helpLink = "";
+                        if (resp.msg.indexOf("Table") !== -1 || resp.msg.indexOf("database") !== -1 || resp.msg.indexOf("Database") !== -1) {
+                            helpLink = "<div class='mt-2 small border-top pt-1'>👉 Database ready nahi hai. <a href='./db_setup.php' class='alert-link fw-bold text-decoration-underline'>DB Setup par click karein</a> aur 1-Click Import run karein.</div>";
+                        }
+                        _el.html("<div>" + resp.msg + "</div>" + helpLink);
                         _this.prepend(_el);
                         _el.show('slow');
                         _this.find('button[type="submit"]').attr('disabled', false).text('Login');
