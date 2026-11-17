@@ -115,6 +115,8 @@ class DBConnection {
         if (!$sql_file) return false;
 
         $sql_content = file_get_contents($sql_file);
+        $sql_content = str_replace(["\r\n", "\r"], "\n", $sql_content);
+
         @$this->conn->query("SET FOREIGN_KEY_CHECKS = 0;");
         @$this->conn->query("SET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';");
         @$this->conn->query("DROP TABLE IF EXISTS `convo_list`;");
@@ -125,12 +127,12 @@ class DBConnection {
         $clean_sql = "";
         foreach ($lines as $line) {
             $trimmed = trim($line);
-            if ($trimmed === '' || str_starts_with($trimmed, '--') || str_starts_with($trimmed, '/*') || str_starts_with($trimmed, '//')) {
+            if ($trimmed === '' || str_starts_with($trimmed, '--') || str_starts_with($trimmed, '/*') || str_starts_with($trimmed, '#')) {
                 continue;
             }
             $clean_sql .= $line . "\n";
         }
-        $statements = explode(";\n", $clean_sql);
+        $statements = preg_split('/;\s*(\n|$)/', $clean_sql);
         foreach ($statements as $st) {
             $st = trim($st);
             if (!empty($st)) {

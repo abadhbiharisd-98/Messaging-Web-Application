@@ -96,6 +96,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'import_sql') {
         $import_message = "SQL Dump file (messaging_db.sql) could not be located on the server.";
     } else {
         $sql_content = file_get_contents($found_sql_file);
+        $sql_content = str_replace(["\r\n", "\r"], "\n", $sql_content);
         
         // Clean Reset: Drop existing messaging tables first
         @$conn->query("SET FOREIGN_KEY_CHECKS = 0;");
@@ -109,14 +110,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'import_sql') {
         $clean_sql = "";
         foreach ($lines as $line) {
             $trimmed = trim($line);
-            // Skip comments and empty lines
-            if ($trimmed === '' || str_starts_with($trimmed, '--') || str_starts_with($trimmed, '/*') || str_starts_with($trimmed, '//')) {
+            if ($trimmed === '' || str_starts_with($trimmed, '--') || str_starts_with($trimmed, '/*') || str_starts_with($trimmed, '#')) {
                 continue;
             }
             $clean_sql .= $line . "\n";
         }
 
-        $statements = explode(";\n", $clean_sql);
+        $statements = preg_split('/;\s*(\n|$)/', $clean_sql);
         $errors = [];
         foreach ($statements as $statement) {
             $statement = trim($statement);
@@ -136,7 +136,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'import_sql') {
 
         if (count($errors) === 0 || $queries_count > 5) {
             $import_status = 'success';
-            $import_message = "Database tables cleanly created and imported successfully! Executed " . $queries_count . " queries.";
+            $import_message = "All tables (`users`, `messages`, `convo_list`) created and demo data imported successfully! Executed " . $queries_count . " queries.";
         } else {
             $import_status = 'warning';
             $import_message = "Import completed with " . count($errors) . " notices. Queries executed: " . $queries_count . ". Notice: " . ($errors[0] ?? '');
@@ -150,6 +150,7 @@ $admin_exists = false;
 $user_count = 0;
 $messages_count = 0;
 $has_email_col = false;
+$messaging_tables_ready = false;
 
 if ($conn) {
     $tables_res = @$conn->query("SHOW TABLES");
@@ -180,6 +181,10 @@ if ($conn) {
             $messages_count = $mres->fetch_row()[0];
         }
     }
+
+    if (in_array('users', $existing_tables) && in_array('messages', $existing_tables) && $has_email_col) {
+        $messaging_tables_ready = true;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -190,6 +195,7 @@ if ($conn) {
     <title>Aiven MySQL & Database Setup | Messaging App</title>
     <link rel="stylesheet" href="./fontawesome/css/all.min.css">
     <link rel="stylesheet" href="./css/bootstrap.min.css">
+    <script src="./js/jquery-3.6.0.min.js"></script>
     <style>
         body {
             background-color: #f0f2f5;
@@ -239,7 +245,7 @@ if ($conn) {
             <small class="opacity-75">1-Click Database Installer & Connectivity Health Check for Render</small>
         </div>
         <div>
-            <a href="./index.php" class="btn btn-outline-light btn-sm"><i class="fa fa-arrow-left me-1"></i> Back to App</a>
+            <a href="./login.php" class="btn btn-outline-light btn-sm"><i class="fa fa-arrow-left me-1"></i> Back to Login</a>
         </div>
     </div>
 </div>
@@ -251,8 +257,8 @@ if ($conn) {
             <p class="mb-0"><?php echo htmlspecialchars($import_message); ?></p>
             <hr>
             <div class="d-flex justify-content-between align-items-center">
-                <span>All default tables and the default admin user (<code>jsmith@sample.com</code> / <code>jsmith</code>) are ready.</span>
-                <a href="./login.php" class="btn btn-success btn-sm"><i class="fa fa-sign-in-alt me-1"></i> Proceed to Login</a>
+                <span>Default tables are created and Admin User (<code>jsmith@sample.com</code> / <code>jsmith</code>) is ready!</span>
+                <a href="./login.php" class="btn btn-success"><i class="fa fa-sign-in-alt me-1"></i> Proceed to Login Now</a>
             </div>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
@@ -270,11 +276,10 @@ if ($conn) {
         </div>
     <?php endif; ?>
 
-    <?php if (in_array('users', $existing_tables) && !$has_email_col): ?>
-        <div class="alert alert-danger shadow-sm mb-4" role="alert">
-            <h5 class="alert-heading"><i class="fa fa-exclamation-triangle me-2"></i> Incompatible Schema Detected!</h5>
-            <p>An existing table named <code>users</code> was found in your database, but it belongs to another application (it does not contain the required <code>email</code> column).</p>
-            <p class="mb-0">Click the green button <strong>"Clean Re-Import Database to Aiven"</strong> below to safely replace it with the Messaging App schema.</p>
+    <?php if (!$messaging_tables_ready): ?>
+        <div class="alert alert-primary shadow-sm mb-4" role="alert">
+            <h5 class="alert-heading mb-1"><i class="fa fa-info-circle me-2"></i> Action Required: Install Messaging Tables</h5>
+            <p class="mb-0">Aapke Aiven MySQL database me is Messaging Web App ke tables (<code>users</code>, <code>messages</code>, <code>convo_list</code>) abhi tak install nahi huye hain. <strong>Neeche diye gaye green button par click karein</strong> taaki tables instantly create ho jayein!</p>
         </div>
     <?php endif; ?>
 
@@ -386,29 +391,42 @@ if ($conn) {
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label small fw-bold">Existing Tables in Database:</label>
+                            <label class="form-label small fw-bold">Messaging Tables Status:</label>
                             <div>
-                                <?php if (count($existing_tables) > 0): ?>
-                                    <?php foreach ($existing_tables as $table): ?>
-                                        <span class="badge bg-success me-1 mb-1"><i class="fa fa-table me-1"></i> <?php echo htmlspecialchars($table); ?></span>
-                                    <?php endforeach; ?>
+                                <?php if ($messaging_tables_ready): ?>
+                                    <span class="badge bg-success me-1 mb-1"><i class="fa fa-check me-1"></i> users (<?php echo $user_count; ?> users)</span>
+                                    <span class="badge bg-success me-1 mb-1"><i class="fa fa-check me-1"></i> messages (<?php echo $messages_count; ?> messages)</span>
+                                    <span class="badge bg-success me-1 mb-1"><i class="fa fa-check me-1"></i> convo_list</span>
                                 <?php else: ?>
-                                    <span class="text-muted small fst-italic">No tables found (Database is empty).</span>
+                                    <span class="text-danger small fw-bold"><i class="fa fa-times-circle me-1"></i> Messaging tables not installed yet.</span>
                                 <?php endif; ?>
                             </div>
                         </div>
 
                         <?php if ($admin_exists): ?>
                             <div class="alert alert-success py-2 small mb-3">
-                                <i class="fa fa-user-shield me-1"></i> <strong>Admin User Verified:</strong> <code>jsmith@sample.com</code> is ready to log in!
+                                <i class="fa fa-user-shield me-1"></i> <strong>Admin User Ready:</strong> <code>jsmith@sample.com</code> is ready to log in!
                             </div>
                         <?php endif; ?>
+
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">All Existing Tables in DB (<?php echo count($existing_tables); ?>):</label>
+                            <div style="max-height: 110px; overflow-y: auto;" class="border p-2 bg-light rounded">
+                                <?php if (count($existing_tables) > 0): ?>
+                                    <?php foreach ($existing_tables as $table): ?>
+                                        <span class="badge bg-secondary me-1 mb-1"><i class="fa fa-table me-1"></i> <?php echo htmlspecialchars($table); ?></span>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <span class="text-muted small fst-italic">No tables found.</span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
                     </div>
 
                     <div>
-                        <form method="POST" onsubmit="return confirm('Do you want to clean-import the Messaging App database schema? Any old conflicting tables will be replaced.');">
+                        <form method="POST" id="import-form">
                             <input type="hidden" name="action" value="import_sql">
-                            <button type="submit" class="btn btn-success w-100 py-2 fw-bold" <?php echo (!$conn || !$found_sql_file) ? 'disabled' : ''; ?>>
+                            <button type="submit" id="btn-import" class="btn btn-success w-100 py-3 fs-5 fw-bold" <?php echo (!$conn || !$found_sql_file) ? 'disabled' : ''; ?>>
                                 <i class="fa fa-cloud-upload-alt me-2"></i> Clean Re-Import Database to Aiven
                             </button>
                         </form>
@@ -515,6 +533,11 @@ if ($conn) {
     Messaging Web Application &bull; Render & Aiven Cloud Deployment Ready &bull; PHP 8.x Compatible
 </footer>
 
+<script>
+    $('#import-form').submit(function(){
+        $('#btn-import').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span> Importing Database... Please wait...');
+    });
+</script>
 <script src="./js/bootstrap.min.js"></script>
 </body>
 </html>
