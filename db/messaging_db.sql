@@ -1,17 +1,7 @@
--- phpMyAdmin SQL Dump
--- version 5.0.1
--- https://www.phpmyadmin.net/
---
--- Host: 127.0.0.1
--- Generation Time: Oct 17, 2021 at 06:14 PM
--- Server version: 10.4.11-MariaDB
--- PHP Version: 7.2.28
-
+-- Messaging Web Application Cloud Schema (Aiven MySQL 8.x Compatible)
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
-SET AUTOCOMMIT = 0;
-START TRANSACTION;
 SET time_zone = "+00:00";
-
+SET FOREIGN_KEY_CHECKS = 0;
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -19,50 +9,38 @@ SET time_zone = "+00:00";
 /*!40101 SET NAMES utf8mb4 */;
 
 --
--- Database: `messaging_db`
---
-
-SET FOREIGN_KEY_CHECKS = 0;
-DROP TABLE IF EXISTS `convo_list`;
-DROP TABLE IF EXISTS `messages`;
-DROP TABLE IF EXISTS `users`;
-
--- --------------------------------------------------------
-
---
 -- Table structure for table `convo_list`
 --
-
+DROP TABLE IF EXISTS `convo_list`;
 CREATE TABLE `convo_list` (
-  `id` int(30) NOT NULL,
-  `from_user` int(30) NOT NULL,
-  `to_user` int(30) NOT NULL,
-  `date_created` datetime NOT NULL DEFAULT current_timestamp()
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `from_user` int(11) NOT NULL,
+  `to_user` int(11) NOT NULL,
+  `date_created` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- --------------------------------------------------------
 
 --
 -- Table structure for table `messages`
 --
-
+DROP TABLE IF EXISTS `messages`;
 CREATE TABLE `messages` (
-  `id` int(30) NOT NULL,
-  `from_user` int(30) NOT NULL,
-  `to_user` int(30) NOT NULL,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `from_user` int(11) NOT NULL,
+  `to_user` int(11) NOT NULL,
   `type` tinyint(1) NOT NULL DEFAULT 1 COMMENT '1 = text , 2 = photos,3 = videos, 4 = documents',
   `message` text NOT NULL,
   `status` tinyint(1) NOT NULL DEFAULT 0,
   `popped` tinyint(1) NOT NULL DEFAULT 0,
   `delete_flag` tinyint(1) NOT NULL DEFAULT 0,
-  `date_created` datetime NOT NULL DEFAULT current_timestamp(),
-  `date_updated` datetime DEFAULT NULL ON UPDATE current_timestamp()
+  `date_created` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `date_updated` datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 --
 -- Dumping data for table `messages`
 --
-
 INSERT INTO `messages` (`id`, `from_user`, `to_user`, `type`, `message`, `status`, `popped`, `delete_flag`, `date_created`, `date_updated`) VALUES
 (1, 1, 2, 1, 'test', 1, 1, 0, '2021-10-16 11:45:21', '2021-10-17 19:36:34'),
 (2, 1, 2, 1, '1', 1, 1, 0, '2021-10-16 11:45:25', '2021-10-17 19:36:34'),
@@ -167,81 +145,33 @@ INSERT INTO `messages` (`id`, `from_user`, `to_user`, `type`, `message`, `status
 (110, 3, 1, 1, 'test', 0, 1, 0, '2021-10-18 00:07:56', '2021-10-18 00:07:56'),
 (111, 3, 1, 1, 'test', 0, 1, 0, '2021-10-18 00:07:59', '2021-10-18 00:08:00');
 
--- --------------------------------------------------------
-
 --
 -- Table structure for table `users`
 --
-
+DROP TABLE IF EXISTS `users`;
 CREATE TABLE `users` (
-  `id` int(30) NOT NULL,
-  `firstname` text NOT NULL,
-  `middlename` text NOT NULL,
-  `lastname` text NOT NULL,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `firstname` varchar(100) NOT NULL,
+  `middlename` varchar(100) DEFAULT '',
+  `lastname` varchar(100) NOT NULL,
   `contact` varchar(50) NOT NULL,
   `gender` varchar(50) NOT NULL,
   `dob` date NOT NULL,
-  `email` text NOT NULL,
-  `password` text NOT NULL,
-  `date_created` datetime NOT NULL DEFAULT current_timestamp(),
-  `date_updated` datetime DEFAULT NULL ON UPDATE current_timestamp()
+  `email` varchar(150) NOT NULL,
+  `password` varchar(255) NOT NULL,
+  `date_created` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `date_updated` datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 --
 -- Dumping data for table `users`
 --
-
 INSERT INTO `users` (`id`, `firstname`, `middlename`, `lastname`, `contact`, `gender`, `dob`, `email`, `password`, `date_created`, `date_updated`) VALUES
 (1, 'John', 'D', 'Smith', '09123456789', 'Male', '1997-06-23', 'jsmith@sample.com', '39ce7e2a8573b41ce73b5ba41617f8f7', '2021-10-15 10:34:00', '2021-10-15 12:58:34'),
 (2, 'Claire', 'C', 'Blake', '09123654987', 'Female', '1997-10-14', 'cblake@sample.com', '4744ddea876b11dcb1d169fadf494418', '2021-10-15 13:04:40', NULL),
 (3, 'Samantha Jane', 'C', 'Lou', '78978511554', 'Female', '1997-07-15', 'slou@sample.com', '1ed1255790523a907da869eab7306f5a', '2021-10-15 13:05:23', NULL),
 (4, 'Mike', 'C', 'Williams', '096546655588', 'Male', '1998-12-10', 'mwilliams@sample.com', 'a88df23ac492e6e2782df6586a0c645f', '2021-10-17 19:54:55', NULL);
 
---
--- Indexes for dumped tables
---
-
---
--- Indexes for table `convo_list`
---
-ALTER TABLE `convo_list`
-  ADD PRIMARY KEY (`id`);
-
---
--- Indexes for table `messages`
---
-ALTER TABLE `messages`
-  ADD PRIMARY KEY (`id`);
-
---
--- Indexes for table `users`
---
-ALTER TABLE `users`
-  ADD PRIMARY KEY (`id`);
-
---
--- AUTO_INCREMENT for dumped tables
---
-
---
--- AUTO_INCREMENT for table `convo_list`
---
-ALTER TABLE `convo_list`
-  MODIFY `id` int(30) NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT for table `messages`
---
-ALTER TABLE `messages`
-  MODIFY `id` int(30) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=112;
-
---
--- AUTO_INCREMENT for table `users`
---
-ALTER TABLE `users`
-  MODIFY `id` int(30) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+SET FOREIGN_KEY_CHECKS = 1;
 COMMIT;
-
-/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
-/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
-/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;

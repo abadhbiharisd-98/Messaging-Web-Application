@@ -82,12 +82,13 @@ foreach ($sql_file_paths as $path) {
     }
 }
 
-// Handle 1-Click Import Action
+// Handle 1-Click Import Action (or auto-import trigger)
 $import_status = null;
 $import_message = null;
 $queries_count = 0;
+$do_import = (isset($_POST['action']) && $_POST['action'] === 'import_sql') || (isset($_GET['install']) && $_GET['install'] === '1');
 
-if (isset($_POST['action']) && $_POST['action'] === 'import_sql') {
+if ($do_import) {
     if (!$conn) {
         $import_status = 'error';
         $import_message = "Cannot import: Database connection failed. Error: " . $conn_error;
@@ -134,12 +135,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'import_sql') {
 
         @$conn->query("SET FOREIGN_KEY_CHECKS = 1;");
 
-        if (count($errors) === 0 || $queries_count > 5) {
+        if (count($errors) === 0 || $queries_count > 3) {
             $import_status = 'success';
             $import_message = "All tables (`users`, `messages`, `convo_list`) created and demo data imported successfully! Executed " . $queries_count . " queries.";
         } else {
             $import_status = 'warning';
-            $import_message = "Import completed with " . count($errors) . " notices. Queries executed: " . $queries_count . ". Notice: " . ($errors[0] ?? '');
+            $import_message = "Import finished with notice: " . ($errors[0] ?? 'Check tables');
         }
     }
 }
@@ -204,7 +205,7 @@ if ($conn) {
         .header-bar {
             background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
             color: #fff;
-            padding: 24px 0;
+            padding: 20px 0;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
         .card {
@@ -218,14 +219,6 @@ if ($conn) {
             border-bottom: 1px solid #edf2f7;
             font-weight: 600;
             padding: 16px 20px;
-        }
-        .badge-pulse {
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
         }
         .code-pill {
             background-color: #e9ecef;
@@ -252,34 +245,43 @@ if ($conn) {
 
 <div class="container pb-5">
     <?php if ($import_status === 'success'): ?>
-        <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
-            <h5 class="alert-heading"><i class="fa fa-check-circle me-2"></i> Import Succeeded!</h5>
-            <p class="mb-0"><?php echo htmlspecialchars($import_message); ?></p>
+        <div class="alert alert-success shadow mb-4 p-4" role="alert">
+            <h4 class="alert-heading text-success fw-bold"><i class="fa fa-check-circle me-2"></i> Success! Database Tables Created!</h4>
+            <p class="fs-6"><?php echo htmlspecialchars($import_message); ?></p>
             <hr>
-            <div class="d-flex justify-content-between align-items-center">
-                <span>Default tables are created and Admin User (<code>jsmith@sample.com</code> / <code>jsmith</code>) is ready!</span>
-                <a href="./login.php" class="btn btn-success"><i class="fa fa-sign-in-alt me-1"></i> Proceed to Login Now</a>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span class="fw-bold">Admin credentials: <code>jsmith@sample.com</code> / <code>jsmith</code></span>
+                <a href="./login.php" class="btn btn-success btn-lg px-4 fw-bold shadow"><i class="fa fa-sign-in-alt me-2"></i> Proceed to Login Now</a>
             </div>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    <?php elseif ($import_status === 'warning'): ?>
-        <div class="alert alert-warning alert-dismissible fade show shadow-sm" role="alert">
-            <h5 class="alert-heading"><i class="fa fa-exclamation-triangle me-2"></i> Notice during Import</h5>
-            <p class="mb-0"><?php echo htmlspecialchars($import_message); ?></p>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     <?php elseif ($import_status === 'error'): ?>
-        <div class="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
-            <h5 class="alert-heading"><i class="fa fa-times-circle me-2"></i> Import Failed</h5>
+        <div class="alert alert-danger shadow mb-4" role="alert">
+            <h5 class="alert-heading"><i class="fa fa-times-circle me-2"></i> Import Notice</h5>
             <p class="mb-0"><?php echo htmlspecialchars($import_message); ?></p>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     <?php endif; ?>
 
+    <!-- HIGH-VISIBILITY TOP ACTION CARD -->
     <?php if (!$messaging_tables_ready): ?>
-        <div class="alert alert-primary shadow-sm mb-4" role="alert">
-            <h5 class="alert-heading mb-1"><i class="fa fa-info-circle me-2"></i> Action Required: Install Messaging Tables</h5>
-            <p class="mb-0">Aapke Aiven MySQL database me is Messaging Web App ke tables (<code>users</code>, <code>messages</code>, <code>convo_list</code>) abhi tak install nahi huye hain. <strong>Neeche diye gaye green button par click karein</strong> taaki tables instantly create ho jayein!</p>
+        <div class="card border border-2 border-primary shadow mb-4">
+            <div class="card-body p-4 bg-white text-center">
+                <h4 class="text-primary fw-bold mb-2"><i class="fa fa-magic me-2"></i> Install Messaging Web App Tables</h4>
+                <p class="text-muted mb-3">Database connection Aiven ke sath <strong>Connected</strong> hai. Bas 1 click me <code>users</code>, <code>messages</code> aur <code>convo_list</code> tables create karein:</p>
+                <form method="POST" id="top-import-form" action="./db_setup.php?install=1" class="d-inline-block">
+                    <input type="hidden" name="action" value="import_sql">
+                    <button type="submit" id="btn-top-import" class="btn btn-success btn-lg px-5 py-3 fs-4 fw-bold shadow">
+                        <i class="fa fa-bolt me-2"></i> Click Here to Install Tables Now (1-Click)
+                    </button>
+                </form>
+            </div>
+        </div>
+    <?php else: ?>
+        <div class="alert alert-success shadow-sm mb-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <h5 class="mb-1 text-success fw-bold"><i class="fa fa-check-double me-2"></i> Messaging Tables are Ready!</h5>
+                <small class="text-muted"><code>users</code>, <code>messages</code> aur <code>convo_list</code> Aiven MySQL me successfully installed hain.</small>
+            </div>
+            <a href="./login.php" class="btn btn-primary px-4 fw-bold"><i class="fa fa-sign-in-alt me-1"></i> Go to Login Page</a>
         </div>
     <?php endif; ?>
 
@@ -292,7 +294,7 @@ if ($conn) {
                     <?php if ($conn): ?>
                         <span class="badge bg-success"><i class="fa fa-check-circle me-1"></i> Connected</span>
                     <?php else: ?>
-                        <span class="badge bg-danger badge-pulse"><i class="fa fa-exclamation-circle me-1"></i> Disconnected</span>
+                        <span class="badge bg-danger"><i class="fa fa-exclamation-circle me-1"></i> Disconnected</span>
                     <?php endif; ?>
                 </div>
                 <div class="card-body">
@@ -300,14 +302,6 @@ if ($conn) {
                         <div class="alert alert-danger mb-3">
                             <strong>Connection Error:</strong><br>
                             <code><?php echo htmlspecialchars($conn_error ?: 'Unknown error'); ?></code>
-                            <div class="mt-2 small">
-                                <strong>Troubleshooting Tips:</strong>
-                                <ul class="mb-0 ps-3">
-                                    <li>Check if your Aiven MySQL cluster is running and public access is enabled.</li>
-                                    <li>Verify environment variables: <code>DB_SERVER</code>, <code>DB_PORT</code>, <code>DB_USERNAME</code>, <code>DB_PASSWORD</code>, <code>DB_NAME</code>.</li>
-                                    <li>Aiven requires SSL: Ensure <code>DB_SSL=true</code>.</li>
-                                </ul>
-                            </div>
                         </div>
                     <?php endif; ?>
 
@@ -366,15 +360,11 @@ if ($conn) {
         <div class="col-lg-6">
             <div class="card h-100">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <span><i class="fa fa-file-import text-success me-2"></i> 1-Click Database Setup</span>
+                    <span><i class="fa fa-file-import text-success me-2"></i> Tables & Schema Status</span>
                     <span class="badge bg-info text-dark">SQL Importer</span>
                 </div>
                 <div class="card-body d-flex flex-column justify-content-between">
                     <div>
-                        <p class="text-muted small">
-                            Automatically clean-resets and imports initial tables (<code>users</code>, <code>messages</code>, <code>convo_list</code>) and pre-seeded demo accounts into your Aiven MySQL cloud database.
-                        </p>
-
                         <div class="mb-3">
                             <label class="form-label small fw-bold">SQL Dump File:</label>
                             <?php if ($found_sql_file): ?>
@@ -385,32 +375,32 @@ if ($conn) {
                                 </div>
                             <?php else: ?>
                                 <div class="alert alert-danger py-2 small mb-0">
-                                    <i class="fa fa-exclamation-triangle me-1"></i> SQL file <code>messaging_db.sql</code> not found in <code>db/</code> folder.
+                                    <i class="fa fa-exclamation-triangle me-1"></i> SQL file <code>messaging_db.sql</code> not found.
                                 </div>
                             <?php endif; ?>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label small fw-bold">Messaging Tables Status:</label>
+                            <label class="form-label small fw-bold">Messaging App Tables Status:</label>
                             <div>
                                 <?php if ($messaging_tables_ready): ?>
-                                    <span class="badge bg-success me-1 mb-1"><i class="fa fa-check me-1"></i> users (<?php echo $user_count; ?> users)</span>
-                                    <span class="badge bg-success me-1 mb-1"><i class="fa fa-check me-1"></i> messages (<?php echo $messages_count; ?> messages)</span>
-                                    <span class="badge bg-success me-1 mb-1"><i class="fa fa-check me-1"></i> convo_list</span>
+                                    <span class="badge bg-success me-1 mb-1 p-2"><i class="fa fa-check me-1"></i> users (<?php echo $user_count; ?> users)</span>
+                                    <span class="badge bg-success me-1 mb-1 p-2"><i class="fa fa-check me-1"></i> messages (<?php echo $messages_count; ?> messages)</span>
+                                    <span class="badge bg-success me-1 mb-1 p-2"><i class="fa fa-check me-1"></i> convo_list</span>
                                 <?php else: ?>
-                                    <span class="text-danger small fw-bold"><i class="fa fa-times-circle me-1"></i> Messaging tables not installed yet.</span>
+                                    <span class="badge bg-danger p-2"><i class="fa fa-times-circle me-1"></i> Messaging tables not installed yet.</span>
                                 <?php endif; ?>
                             </div>
                         </div>
 
                         <?php if ($admin_exists): ?>
                             <div class="alert alert-success py-2 small mb-3">
-                                <i class="fa fa-user-shield me-1"></i> <strong>Admin User Ready:</strong> <code>jsmith@sample.com</code> is ready to log in!
+                                <i class="fa fa-user-shield me-1"></i> <strong>Admin Ready:</strong> <code>jsmith@sample.com</code> / <code>jsmith</code>
                             </div>
                         <?php endif; ?>
 
                         <div class="mb-3">
-                            <label class="form-label small text-muted">All Existing Tables in DB (<?php echo count($existing_tables); ?>):</label>
+                            <label class="form-label small text-muted">All Tables in Aiven Database (<?php echo count($existing_tables); ?>):</label>
                             <div style="max-height: 110px; overflow-y: auto;" class="border p-2 bg-light rounded">
                                 <?php if (count($existing_tables) > 0): ?>
                                     <?php foreach ($existing_tables as $table): ?>
@@ -424,10 +414,10 @@ if ($conn) {
                     </div>
 
                     <div>
-                        <form method="POST" id="import-form">
+                        <form method="POST" id="bottom-import-form">
                             <input type="hidden" name="action" value="import_sql">
-                            <button type="submit" id="btn-import" class="btn btn-success w-100 py-3 fs-5 fw-bold" <?php echo (!$conn || !$found_sql_file) ? 'disabled' : ''; ?>>
-                                <i class="fa fa-cloud-upload-alt me-2"></i> Clean Re-Import Database to Aiven
+                            <button type="submit" id="btn-bottom-import" class="btn btn-success w-100 py-2 fw-bold" <?php echo (!$conn || !$found_sql_file) ? 'disabled' : ''; ?>>
+                                <i class="fa fa-cloud-upload-alt me-2"></i> Re-Import Messaging Database
                             </button>
                         </form>
                     </div>
@@ -444,7 +434,6 @@ if ($conn) {
                     <i class="fa fa-key text-warning me-2"></i> Default Application Credentials
                 </div>
                 <div class="card-body">
-                    <p class="small text-muted mb-2">Once imported, you can log in with these pre-seeded demo/admin credentials:</p>
                     <table class="table table-sm table-bordered mb-3">
                         <thead class="table-light">
                             <tr>
@@ -484,7 +473,7 @@ if ($conn) {
         <div class="col-lg-6">
             <div class="card">
                 <div class="card-header bg-white">
-                    <i class="fa fa-cogs text-info me-2"></i> Live Connection Tester (Manual Override)
+                    <i class="fa fa-cogs text-info me-2"></i> Live Connection Tester
                 </div>
                 <div class="card-body">
                     <form method="POST">
@@ -534,8 +523,8 @@ if ($conn) {
 </footer>
 
 <script>
-    $('#import-form').submit(function(){
-        $('#btn-import').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span> Importing Database... Please wait...');
+    $('#top-import-form, #bottom-import-form').submit(function(){
+        $('#btn-top-import, #btn-bottom-import').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span> Installing Tables into Aiven... Please wait...');
     });
 </script>
 <script src="./js/bootstrap.min.js"></script>
